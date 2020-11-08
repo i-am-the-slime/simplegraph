@@ -211,7 +211,7 @@ const calculateVirtualEdge = (n1, n2) => {
 // type VEdge = Path"
 // type VNode = { position :: Point, width :: Number, height :: Number }
 
-exports.render = (svgGraph) => (nodes) => (edges) => (layers) => () => {
+exports.render = (svgGraph) => (nodes) => (edges) => (positions) => () => {
     if (!svgGraph.elementCache || !svgGraph.vdom) {
         // initialise elementCache
         console.log("initialising element cache")
@@ -221,18 +221,24 @@ exports.render = (svgGraph) => (nodes) => (edges) => (layers) => () => {
     }
 
     // Calculate new node vDom
-    let nodesPerLayer = {}
-    const newVNodes = nodes.map(node => {
-        if (!nodesPerLayer[layers[node.id]]) {
-            nodesPerLayer[layers[node.id]] = 0
+    const maxLayerLength = (() => {
+        switch (positions.length) {
+            case 0: return 0
+            case 1: return positions[0].length
+            case 2: return Math.max(positions[0].length, positions[1].length)
+            default: return Math.max(positions[0].length, positions[1].length, positions[positions.length - 1].length)
         }
-        const result = {
-            node,
-            x: nodesPerLayer[layers[node.id]] * MAX_NODE_WIDTH,
-            y: layers[node.id] * 100
-        }
-        nodesPerLayer[layers[node.id]] += 1
-        return result
+    })()
+    const newVNodes = positions.flatMap((layer, layerIdx) => {
+        return layer.map((nodeId, idx) => {
+            const node = nodes.find(x => x.id == nodeId)
+            const result = {
+                node,
+                x: idx * MAX_NODE_WIDTH + (((maxLayerLength - layer.length) / 2) * MAX_NODE_WIDTH),
+                y: layerIdx * 100
+            }
+            return result
+        })
     })
 
     const vNodeDiff = (() => {

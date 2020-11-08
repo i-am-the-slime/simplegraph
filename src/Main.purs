@@ -1,7 +1,7 @@
 module Main where
 
 import Prelude
-import Algorithms (assignLayers, fillUp, greedyCycleRemoval, removeTwoCycles)
+import Algorithms (assignLayers, fillUp, greedyCycleRemoval, ordering, removeTwoCycles)
 import Data.Array as Array
 import Data.DateTime.Instant (unInstant)
 import Data.Time.Duration (class Duration, negateDuration)
@@ -20,7 +20,7 @@ type Point =
 
 foreign import init ∷ Effect SVGGraph
 
-foreign import render ∷ SVGGraph -> Array Node -> Array Edge -> Object Int -> Effect Unit
+foreign import render ∷ SVGGraph -> Array Node -> Array Edge -> Array (Array NodeId) -> Effect Unit
 
 main ∷ Effect Unit
 main = do
@@ -51,7 +51,8 @@ run svgGraph = do
         noCycles = greedyCycleRemoval $ Graph { nodes, edges: noTwoCycles.edges }
         layers1 = assignLayers $ Graph { nodes, edges: noCycles.edges }
         filled = fillUp (Graph { nodes, edges: edges }) layers1
-      render svgGraph filled.nodes filled.edges filled.layers
+        order = ordering (Graph { nodes: filled.nodes, edges: filled.edges }) filled.layers
+      render svgGraph filled.nodes filled.edges order
 
     mainLoop ∷ Aff Void
     mainLoop = do
@@ -105,41 +106,11 @@ interactions =
       , from: NodeId "some"
       , to: NodeId "another"
       }
-  --   , Edge
-  --       { label: EdgeLabel "Bla bl"
-  --       , from: NodeId "another"
-  --       , to: NodeId "db"
-  --       }
-  --   , Edge
-  --       { label: EdgeLabel "Bla bl"
-  --       , from: NodeId "db"
-  --       , to: NodeId "some"
-  --       }
-  --   , Edge
-  --       { label: EdgeLabel "Bla bl"
-  --       , from: NodeId "another"
-  --       , to: NodeId "some"
-  --       }
-  --   , Edge
-  --       { label: EdgeLabel "Bla bla"
-  --       , from: NodeId "bs"
-  --       , to: NodeId "some"
-  --       }
-  --   , Edge
-  --       { label: EdgeLabel "Bla bla"
-  --       , from: NodeId "hollywood"
-  --       , to: NodeId "some"
-  --       }
-  --   , Edge
-  --       { label: EdgeLabel "Bla bl"
-  --       , from: NodeId "bus"
-  --       , to: NodeId "hollywood"
-  --       }
-  , Edge
-      { label: EdgeLabel "Bla bl"
-      , from: NodeId "queue"
-      , to: NodeId "db"
-      }
+  -- , Edge
+  --     { label: EdgeLabel "Bla bl"
+  --     , from: NodeId "queue"
+  --     , to: NodeId "db"
+  --     }
   , Edge
       { label: EdgeLabel "label"
       , from: NodeId "db"
@@ -147,8 +118,8 @@ interactions =
       }
   , Edge
       { label: EdgeLabel "label"
-      , from: NodeId "some"
-      , to: NodeId "db"
+      , from: NodeId "bus"
+      , to: NodeId "bs"
       }
   , Edge
       { label: EdgeLabel "label"
