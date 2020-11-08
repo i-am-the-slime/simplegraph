@@ -1,7 +1,7 @@
 module Test.Main where
 
 import Prelude
-import Algorithms (assignLayers, greedyCycleRemoval, immediatePredecessors, predecessors, printIds, removeCycles, removeTwoCycles)
+import Algorithms (assignLayers, countCrossings, fillUp, greedyCycleRemoval, immediatePredecessors, ordering, predecessors, printIds, removeCycles, removeCycles2, removeTwoCycles)
 import Data.Array (intercalate, (..))
 import Data.Foldable (maximum, traverse_)
 import Data.Maybe (Maybe(..))
@@ -27,35 +27,57 @@ main = do
   -- let _ = spy "with two-cycles removed" $ removeTwoCycles simpleGraph
   -- log "\n-------------------\n\n"
   
-  log "\n\n----------------------\n"
-  let (Graph { nodes }) = simpleGraph
-  let noTwoCycles = removeTwoCycles simpleGraph
-  let noCycles = greedyCycleRemoval $ Graph { nodes, edges: noTwoCycles.edges }
-  let layers = spy "the layers" $ assignLayers $ Graph { nodes, edges: noCycles.edges }
-  case layers # Object.values # maximum of
-    Nothing -> log "empty graph, boring"
-    Just m ->
-      (0 .. m)
-        # traverse_ \i ->
-            layers
-              # Object.filter (_ == i)
-              # Object.keys
-              # intercalate "\t"
-              # log
-  log "\n-------------------\n\n"
-
--- log "\nWithout cycles"
--- log <<< printIds $ removeCycles simpleGraph
--- log "\nPredecessors"
--- log <<< show $ immediatePredecessors (NodeId "n3") (un Graph simpleGraph).edges
--- log "\nWith layers"
--- log <<< show $ spy "oho" $ assignLayers (removeCycles simpleGraph)
+  -- log "\n\n----------------------\n"
+  -- let (Graph { nodes }) = simpleGraph
+  -- let noTwoCycles = removeTwoCycles simpleGraph
+  -- let noCycles = greedyCycleRemoval $ Graph { nodes, edges: noTwoCycles.edges }
+  -- let layers = spy "the layers" $ assignLayers $ Graph { nodes, edges: noCycles.edges }
+  -- case layers # Object.values # maximum of
+  --   Nothing -> log "empty graph, boring"
+  --   Just m ->
+  --     (0 .. m)
+  --       # traverse_ \i ->
+  --           layers
+  --             # Object.filter (_ == i)
+  --             # Object.keys
+  --             # intercalate "\t"
+  --             # log
+  -- log "\n-------------------\n\n"
+  -- let _ = spy "filli" $ fillUp (Graph { nodes, edges: noCycles.edges }) layers
+  -- log "\n-------------------\n\n"
+  
+  -- log "\n-------------------\n\n"
+  -- logShow
+  --   $ countCrossings
+  --       [ n "a", n "b", n "c" ]
+  --       [ n "d", n "e", n "f" ]
+  --       [ ed "a" "d"
+  --       , ed "a" "e"
+  --       , ed "b" "d"
+  --       , ed "b" "e"
+  --       , ed "c" "d"
+  --       ]
+  -- log "\n-------------------\n\n"
+  
+  
+  -- log "\nWithout cycles"
+  -- log <<< printIds $ removeCycles simpleGraph
+  -- log "\nPredecessors"
+  -- log <<< show $ immediatePredecessors (NodeId "n3") (un Graph simpleGraph).edges
+  
+  log "\n\n\n"
+  log "\nAll steps"
+  let
+    nodes = (1 .. 5 <#> \num -> n ("n" <> show num))
+    allEdges = [ e 1 2, e 1 3, e 2 5, e 3 4 ]
+  let graph = Graph { nodes, edges: allEdges }
+  let { edges } = greedyCycleRemoval graph
+  let layers = assignLayers (Graph { nodes, edges })
+  let _ = spy "oho" $ ordering (Graph { nodes, edges }) layers
+  log "\n\n\n"
 
 -- log "\nPredecessors"
 -- log <<< show $ nodespy "predecessors" $ predecessors (simpleGraph)
-
--- log "\nWith layers"
--- log <<< show $ spy "oho" $ assignLayers (simpleGraph)
 
 withTwoCycles ∷ Graph
 withTwoCycles = Graph { edges, nodes }
@@ -95,5 +117,13 @@ e from to =
   Edge
     { from: NodeId ("n" <> show from)
     , to: NodeId ("n" <> show to)
+    , label: EdgeLabel ""
+    }
+
+ed ∷ String -> String -> Edge
+ed from to =
+  Edge
+    { from: NodeId from
+    , to: NodeId to
     , label: EdgeLabel ""
     }

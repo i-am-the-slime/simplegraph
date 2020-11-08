@@ -1,7 +1,7 @@
 module Main where
 
 import Prelude
-import Data.Array (take)
+import Algorithms (assignLayers, fillUp, greedyCycleRemoval, removeTwoCycles)
 import Data.Array as Array
 import Data.DateTime.Instant (unInstant)
 import Data.Time.Duration (class Duration, negateDuration)
@@ -10,188 +10,160 @@ import Effect.Aff (Aff, Milliseconds(..), delay, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Now (now)
 import Effect.Random (randomInt)
-import Random.LCG (mkSeed)
-import Test.QuickCheck.Gen (sample, shuffle)
+import Foreign.Object (Object)
+import Types (Edge(..), EdgeLabel(..), Graph(..), Node(..), NodeId(..), NodeLabel(..))
 
-foreign import data Graph ∷ Type
-
-foreign import data Node ∷ Type
-
-foreign import data Path ∷ Type
-
-class Drawable a
-
-instance drawableNode ∷ Drawable Node
-
-instance drawablePath ∷ Drawable Path
+foreign import data SVGGraph ∷ Type
 
 type Point =
   { x ∷ Int, y ∷ Int }
 
-type Fns =
-  { appendChild ∷ Node -> Effect Unit }
+foreign import init ∷ Effect SVGGraph
 
-foreign import init ∷ Effect Graph
-
-foreign import render ∷ Graph -> Array Service -> Array Interaction -> Effect Unit
-
-newtype ServiceId = ServiceId String
-
-newtype Service = Service
-  { id ∷ ServiceId
-  , name ∷ String
-  , description ∷ String
-  }
-
-newtype InteractionId = InteractionId String
-
-newtype Interaction = Interaction
-  { description ∷ String
-  , from ∷ ServiceId
-  , to ∷ ServiceId
-  }
-
-type State =
-  { services ∷ Array Service
-  , interactions ∷ Array Interaction
-  }
+foreign import render ∷ SVGGraph -> Array Node -> Array Edge -> Object Int -> Effect Unit
 
 main ∷ Effect Unit
 main = do
-  graph <- init
-  run graph
+  svgGraph <- init
+  run svgGraph
 
-run ∷ Graph -> Effect Unit
-run graph = do
+run ∷ SVGGraph -> Effect Unit
+run svgGraph = do
   launchAff_ mainLoop
   where
     update = do
-      dropAmount <- randomInt 0 (Array.length interactions - 2)
-      takeAmount <- randomInt 1 3
-      render graph
-        [ Service
-            { id: ServiceId "some"
-            , name: "Some Service"
-            , description: "It does something"
-            }
-        , Service
-            { id: ServiceId "another"
-            , name: "Another Service"
-            , description: "It does something else"
-            }
-        , Service
-            { id: ServiceId "3"
-            , name: "Queue Service"
-            , description: "It does something else"
-            }
-        , Service
-            { id: ServiceId "4"
-            , name: "DB Service"
-            , description: "It does something else"
-            }
-        , Service
-            { id: ServiceId "5"
-            , name: "BS Service"
-            , description: "It does something else"
-            }
-        , Service
-            { id: ServiceId "8"
-            , name: "Out of Names Service"
-            , description: "It does something else"
-            }
-        , Service
-            { id: ServiceId "6"
-            , name: "Last Service"
-            , description: "It does something else"
-            }
-        , Service
-            { id: ServiceId "7"
-            , name: "Hollywood Service"
-            , description: "It does something else"
-            }
-        ]
-        ((Array.drop dropAmount >>> Array.take takeAmount) interactions)
+      let
+        nodes = someNodes
+        edges = interactions
+        -- nodes =
+        --   [ Node { id: NodeId "n1", label: NodeLabel "1" }
+        --   , Node { id: NodeId "n2", label: NodeLabel "2" }
+        --   , Node { id: NodeId "n3", label: NodeLabel "3" }
+        --   , Node { id: NodeId "n4", label: NodeLabel "4" }
+        --   ]
+        -- edges =
+        --   [ Edge { from: NodeId "n1", to: NodeId "n2", label: EdgeLabel "" }
+        --   , Edge { from: NodeId "n1", to: NodeId "n4", label: EdgeLabel "" }
+        --   , Edge { from: NodeId "n2", to: NodeId "n3", label: EdgeLabel "" }
+        --   , Edge { from: NodeId "n3", to: NodeId "n4", label: EdgeLabel "" }
+        --   ]
+        noTwoCycles = removeTwoCycles $ Graph { nodes, edges }
+        noCycles = greedyCycleRemoval $ Graph { nodes, edges: noTwoCycles.edges }
+        layers1 = assignLayers $ Graph { nodes, edges: noCycles.edges }
+        filled = fillUp (Graph { nodes, edges: edges }) layers1
+      render svgGraph filled.nodes filled.edges filled.layers
 
     mainLoop ∷ Aff Void
     mainLoop = do
       startTime <- now <#> unInstant # liftEffect
       liftEffect update
       endTime <- now <#> unInstant # liftEffect
-      delay (200.0 # Milliseconds)
+      delay (5000.0 # Milliseconds)
       -- delay ((1000.0 / 60.0 # Milliseconds) <>- (endTime <>- startTime))
       mainLoop
 
-interactions ∷ Array Interaction
+someNodes ∷ Array Node
+someNodes =
+  [ Node
+      { id: NodeId "some"
+      , label: NodeLabel "Some Node"
+      }
+  , Node
+      { id: NodeId "another"
+      , label: NodeLabel "Another Node"
+      }
+  , Node
+      { id: NodeId "queue"
+      , label: NodeLabel "Queue Node"
+      }
+  , Node
+      { id: NodeId "db"
+      , label: NodeLabel "DB Node"
+      }
+  , Node
+      { id: NodeId "bs"
+      , label: NodeLabel "BS Node"
+      }
+  , Node
+      { id: NodeId "bus"
+      , label: NodeLabel "Bus Node"
+      }
+  , Node
+      { id: NodeId "last"
+      , label: NodeLabel "Last Node"
+      }
+  , Node
+      { id: NodeId "hollywood"
+      , label: NodeLabel "Hollywood Service"
+      }
+  ]
+
+interactions ∷ Array Edge
 interactions =
-  [ Interaction
-      { description: "Bla bla"
-      , from: ServiceId "some"
-      , to: ServiceId "another"
+  [ Edge
+      { label: EdgeLabel "Bla bla"
+      , from: NodeId "some"
+      , to: NodeId "another"
       }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "another"
-      , to: ServiceId "4"
+  --   , Edge
+  --       { label: EdgeLabel "Bla bl"
+  --       , from: NodeId "another"
+  --       , to: NodeId "db"
+  --       }
+  --   , Edge
+  --       { label: EdgeLabel "Bla bl"
+  --       , from: NodeId "db"
+  --       , to: NodeId "some"
+  --       }
+  --   , Edge
+  --       { label: EdgeLabel "Bla bl"
+  --       , from: NodeId "another"
+  --       , to: NodeId "some"
+  --       }
+  --   , Edge
+  --       { label: EdgeLabel "Bla bla"
+  --       , from: NodeId "bs"
+  --       , to: NodeId "some"
+  --       }
+  --   , Edge
+  --       { label: EdgeLabel "Bla bla"
+  --       , from: NodeId "hollywood"
+  --       , to: NodeId "some"
+  --       }
+  --   , Edge
+  --       { label: EdgeLabel "Bla bl"
+  --       , from: NodeId "bus"
+  --       , to: NodeId "hollywood"
+  --       }
+  , Edge
+      { label: EdgeLabel "Bla bl"
+      , from: NodeId "queue"
+      , to: NodeId "db"
       }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "some"
-      , to: ServiceId "6"
+  , Edge
+      { label: EdgeLabel "label"
+      , from: NodeId "db"
+      , to: NodeId "bus"
       }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "another"
-      , to: ServiceId "some"
+  , Edge
+      { label: EdgeLabel "label"
+      , from: NodeId "some"
+      , to: NodeId "db"
       }
-  , Interaction
-      { description: "Bla bla"
-      , from: ServiceId "5"
-      , to: ServiceId "some"
+  , Edge
+      { label: EdgeLabel "label"
+      , from: NodeId "another"
+      , to: NodeId "last"
       }
-  , Interaction
-      { description: "Bla bla"
-      , from: ServiceId "7"
-      , to: ServiceId "some"
+  , Edge
+      { label: EdgeLabel "Bla bla"
+      , from: NodeId "db"
+      , to: NodeId "bs"
       }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "another"
-      , to: ServiceId "3"
-      }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "3"
-      , to: ServiceId "4"
-      }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "4"
-      , to: ServiceId "8"
-      }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "some"
-      , to: ServiceId "4"
-      }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "another"
-      , to: ServiceId "6"
-      }
-  , Interaction
-      { description: "Bla bla"
-      , from: ServiceId "4"
-      , to: ServiceId "5"
-      }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "another"
-      , to: ServiceId "3"
-      }
-  , Interaction
-      { description: "Bla bl"
-      , from: ServiceId "7"
-      , to: ServiceId "3"
+  , Edge
+      { label: EdgeLabel "label"
+      , from: NodeId "hollywood"
+      , to: NodeId "bs"
       }
   ]
 

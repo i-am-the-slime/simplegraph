@@ -7,7 +7,7 @@ const TEXT_PADDING_LEFT = 20
 const TEXT_PADDING_RIGHT = 20
 const TEXT_PADDING_TOP = 14
 const TEXT_PADDING_BOTTOM = 14
-const MAX_NODE_WIDTH = 250
+const MAX_NODE_WIDTH = 180
 const MAX_NODES_PER_ROW = 3
 const ARROW_LENGTH = 5
 const STROKE_WIDTH = 2
@@ -30,8 +30,8 @@ const defs =
 exports.init = () => {
     const svg = createSVGElement("svg")
     svg.setAttribute("id", "graph")
-    svg.setAttribute("height", 800)
-    svg.setAttribute("width", 800)
+    svg.setAttribute("height", 5000)
+    svg.setAttribute("width", 1000)
     svg.setAttribute("xmlns", svgNS)
     svg.setAttribute("style", `background: ${BG_COL}`)
     const container = document.getElementById("container")
@@ -43,8 +43,12 @@ exports.init = () => {
 
 const appendNode = (n, graph) => {
     n.visible = false
-    n2 = graph.appendChild(n)
-    width = n2.childNodes[1].getBBox().width
+    const n2 = graph.appendChild(n)
+    const width = n2.childNodes[1].getBBox().width
+    const bbox = n2.getBBox()
+    const x = bbox.x + ((MAX_NODE_WIDTH - width) / 2)
+    n.childNodes[0].setAttribute("x", x)
+    n.childNodes[1].setAttribute("x", x + TEXT_PADDING_LEFT)
     n.childNodes[0].setAttribute("width", Math.min(width + TEXT_PADDING_LEFT + TEXT_PADDING_RIGHT, MAX_NODE_WIDTH))
     n.childNodes[0].setAttribute("height", TEXT_PADDING_TOP + FONT_SIZE + TEXT_PADDING_BOTTOM)
     n.visible = true
@@ -73,14 +77,14 @@ const createElement = () => {
     return group
 }
 
-const updateNode = (name, point, group) => {
+const updateNode = (label, point, group) => {
     const [rect, title] = group.childNodes
     rect.setAttribute("x", point.x)
     rect.setAttribute("y", point.y)
     title.setAttribute("x", point.x + TEXT_PADDING_LEFT)
     title.setAttribute("y", point.y + TEXT_PADDING_TOP)
     const text = title.firstChild
-    text.nodeValue = name
+    text.nodeValue = label
 }
 
 const createPathLoop = (bb) => {
@@ -88,7 +92,7 @@ const createPathLoop = (bb) => {
 }
 
 const createPathUp = (bb1, bb2) => {
-    return `M${bb1.x + bb1.width / 2} ${bb1.y} L ${bb2.x + bb2.width / 2} ${bb2.y + bb2.height}`
+    return `M${bb1.x + bb1.width / 2} ${bb1.y} L ${bb2.x + bb2.width / 2} ${bb2.y + bb2.height + ARROW}`
 }
 
 const createPathRight = (bb1, bb2) => {
@@ -96,7 +100,7 @@ const createPathRight = (bb1, bb2) => {
 }
 
 const createPathDown = (bb1, bb2) => {
-    return `M${bb1.x + bb1.width / 2} ${bb1.y} L ${bb2.x + bb2.width / 2} ${bb2.y + bb2.height}`
+    return `M${bb1.x + bb1.width / 2} ${bb1.y + bb1.height} L ${bb2.x + bb2.width / 2} ${bb2.y - ARROW}`
 }
 
 const createPathLeft = (bb1, bb2) => {
@@ -159,6 +163,15 @@ const updateEdge = (path, vEdge) => {
     path.setAttribute("d", vEdge)
 }
 
+// Names
+//
+//     ----o----o----o----
+//     |  NW    N   NE    |
+//     o W              E o
+//     |  SW    S   SE    |
+//     ----o----o----o----
+// 
+
 const calculateVirtualEdge = (n1, n2) => {
 
     const bb1 = n1.getBBox()
@@ -198,30 +211,36 @@ const calculateVirtualEdge = (n1, n2) => {
 // type VEdge = Path"
 // type VNode = { position :: Point, width :: Number, height :: Number }
 
-exports.render = (graph) => (services) => (interactions) => () => {
-    if (!graph.elementCache || !graph.vdom) {
+exports.render = (svgGraph) => (nodes) => (edges) => (layers) => () => {
+    if (!svgGraph.elementCache || !svgGraph.vdom) {
         // initialise elementCache
         console.log("initialising element cache")
-        graph.elementCache = {}
-        graph.edgeElementCache = {}
-        graph.vdom = { vNodes: {}, vEdges: {} }
+        svgGraph.elementCache = {}
+        svgGraph.edgeElementCache = {}
+        svgGraph.vdom = { vNodes: {}, vEdges: {} }
     }
 
     // Calculate new node vDom
-    const newVNodes = services.map((service, i) => {
-        return {
-            service,
-            x: (i % MAX_NODES_PER_ROW) * MAX_NODE_WIDTH,
-            y: (i / MAX_NODES_PER_ROW | 0) * 100
+    let nodesPerLayer = {}
+    const newVNodes = nodes.map(node => {
+        if (!nodesPerLayer[layers[node.id]]) {
+            nodesPerLayer[layers[node.id]] = 0
         }
+        const result = {
+            node,
+            x: nodesPerLayer[layers[node.id]] * MAX_NODE_WIDTH,
+            y: layers[node.id] * 100
+        }
+        nodesPerLayer[layers[node.id]] += 1
+        return result
     })
 
     const vNodeDiff = (() => {
         const result = [];
         const toDelete = {}
-        Object.assign(toDelete, graph.vdom.vNodes)
+        Object.assign(toDelete, svgGraph.vdom.vNodes)
         newVNodes.forEach(vNode => {
-            const fromCache = graph.vdom.vNodes[vNode.service.id]
+            const fromCache = svgGraph.vdom.vNodes[vNode.node.id]
             if (!fromCache) { // Not in cache yet!
                 result.push({ type: "add", vNode })
             } else if (fromCache.x == vNode.x && fromCache.y == vNode.y) {
@@ -231,10 +250,10 @@ exports.render = (graph) => (services) => (interactions) => () => {
                 result.push({ type: "update", vNode })
             }
             // Delete from toDelete means keep
-            delete toDelete[vNode.service.id]
+            delete toDelete[vNode.node.id]
         })
         for (const key in toDelete) {
-            result.push({ type: "delete", id: toDelete[key].service.id })
+            result.push({ type: "delete", id: toDelete[key].node.id })
         }
         return result
     })()
@@ -242,44 +261,44 @@ exports.render = (graph) => (services) => (interactions) => () => {
     // Apply VDom changes
     vNodeDiff.forEach(change => {
         if (change.type == "add") {
-            // console.log("Create", change.vNode.service.id)
+            // console.log("Create", change.vNode.node.id)
             const element = createElement()
             const position = { x: change.vNode.x, y: change.vNode.y }
-            updateNode(change.vNode.service.name, position, element)
-            appendNode(element, graph)
-            graph.elementCache[change.vNode.service.id] = element
-            graph.vdom.vNodes[change.vNode.service.id] = change.vNode
+            updateNode(change.vNode.node.label, position, element)
+            appendNode(element, svgGraph)
+            svgGraph.elementCache[change.vNode.node.id] = element
+            svgGraph.vdom.vNodes[change.vNode.node.id] = change.vNode
         }
         else if (change.type == "update") {
-            // console.log("Update", change.vNode.service.id)
-            const element = graph.elementCache[change.vNode.service.id]
+            // console.log("Update", change.vNode.node.id)
+            const element = svgGraph.elementCache[change.vNode.node.id]
             const position = { x: change.vNode.x, y: change.vNode.y }
-            updateNode(change.vNode.service.name, position, element)
-            graph.elementCache[change.vNode.service.id] = element
-            graph.vdom.vNodes[change.vNode.service.id] = change.vNode
+            updateNode(change.vNode.node.label, position, element)
+            svgGraph.elementCache[change.vNode.node.id] = element
+            svgGraph.vdom.vNodes[change.vNode.node.id] = change.vNode
         } else if (change.type == "delete") {
             // console.log("Delete", change.id)
-            const element = graph.elementCache[change.id]
-            graph.removeChild(element)
-            delete graph.elementCache[change.id]
-            delete graph.vdom.vNodes[change.id]
+            const element = svgGraph.elementCache[change.id]
+            svgGraph.removeChild(element)
+            delete svgGraph.elementCache[change.id]
+            delete svgGraph.vdom.vNodes[change.id]
         }
     })
 
     // Calculate new edge vDom
-    const newEdgeVNodes = interactions.map((interaction) => {
-        const fromNode = graph.elementCache[interaction.from]
-        const toNode = graph.elementCache[interaction.to]
+    const newEdgeVNodes = edges.map((interaction) => {
+        const fromNode = svgGraph.elementCache[interaction.from]
+        const toNode = svgGraph.elementCache[interaction.to]
         const vEdge = calculateVirtualEdge(fromNode, toNode)
         return { from: interaction.from, to: interaction.to, vEdge }
     })
 
     const vNodeEdgeDiff = (() => {
         const result = [];
-        const toDelete = Object.assign({}, graph.vdom.vEdges)
+        const toDelete = Object.assign({}, svgGraph.vdom.vEdges)
         newEdgeVNodes.forEach(({ vEdge, from, to }) => {
             const key = JSON.stringify({ from, to })
-            const fromCache = graph.vdom.vEdges[key]
+            const fromCache = svgGraph.vdom.vEdges[key]
             if (!fromCache) { // Not in cache yet!
                 result.push({ type: "add", vEdge, key })
             } else if (fromCache == key) {
@@ -302,150 +321,42 @@ exports.render = (graph) => (services) => (interactions) => () => {
         if (change.type == "add") {
             // console.log("Create edge", change.key)
             const element = createEdge()
-            graph.appendChild(element)
+            svgGraph.appendChild(element)
             updateEdge(element, change.vEdge)
-            graph.edgeElementCache[change.key] = element
-            graph.vdom.vEdges[change.key] = change.vEdge
+            svgGraph.edgeElementCache[change.key] = element
+            svgGraph.vdom.vEdges[change.key] = change.vEdge
         }
         else if (change.type == "update") {
             // console.log("Update edge", change.key)
-            const element = graph.edgeElementCache[change.key]
+            const element = svgGraph.edgeElementCache[change.key]
             updateEdge(element, change.vEdge)
-            graph.edgeElementCache[change.key] = element
-            graph.vdom.vEdges[change.key] = change.vEdge
+            svgGraph.edgeElementCache[change.key] = element
+            svgGraph.vdom.vEdges[change.key] = change.vEdge
         } else if (change.type == "delete") {
             // console.log("Delete edge", change.key)
-            const element = graph.edgeElementCache[change.key]
-            graph.removeChild(element)
-            delete graph.edgeElementCache[change.key]
-            delete graph.vdom.vEdges[change.key]
+            const element = svgGraph.edgeElementCache[change.key]
+            svgGraph.removeChild(element)
+            delete svgGraph.edgeElementCache[change.key]
+            delete svgGraph.vdom.vEdges[change.key]
         }
     })
 
 }
 
-exports.render2 = (graph) => (services) => (interactions) => () => {
-    if (!graph.elementCache || !graph.vdom) {
-        // initialise elementCache
-        console.log("initialising element cache")
-        graph.elementCache = {}
-        graph.edgeElementCache = {}
-        graph.vdom = { vNodes: {}, vEdges: {} }
-    }
 
-    // Calculate new node vDom
-    const newVNodes = services.map((service, i) => {
-        return {
-            service,
-            x: (i % MAX_NODES_PER_ROW) * MAX_NODE_WIDTH,
-            y: (i / MAX_NODES_PER_ROW | 0) * 100
-        }
-    })
-
-    const vNodeDiff = (() => {
-        const result = [];
-        const toDelete = {}
-        Object.assign(toDelete, graph.vdom.vNodes)
-        newVNodes.forEach(vNode => {
-            const fromCache = graph.vdom.vNodes[vNode.service.id]
-            if (!fromCache) { // Not in cache yet!
-                result.push({ type: "add", vNode })
-            } else if (fromCache.x == vNode.x && fromCache.y == vNode.y) {
-                // Cached and fine
-            } else {
-                // In cache but stale
-                result.push({ type: "update", vNode })
-            }
-            // Delete from toDelete means keep
-            delete toDelete[vNode.service.id]
+/// !!!
+// COPIED from Algorithms!!! Change it there and copy back here
+/// !!!
+const predecessorsAndSuccessors = ({ nodes, edges }) => {
+    const predecessors = {}
+    const successors = {}
+    nodes.forEach(node => {
+        predecessors[node.id] = []
+        successors[node.id] = []
+        edges.forEach(e => {
+            if (e.from == node.id) successors[node.id].push(e.to)
+            if (e.to == node.id) predecessors[node.id].push(e.from)
         })
-        for (const key in toDelete) {
-            result.push({ type: "delete", id: toDelete[key].service.id })
-        }
-        return result
-    })()
-
-    // Apply VDom changes
-    vNodeDiff.forEach(change => {
-        if (change.type == "add") {
-            // console.log("Create", change.vNode.service.id)
-            const element = createElement()
-            const position = { x: change.vNode.x, y: change.vNode.y }
-            updateNode(change.vNode.service.name, position, element)
-            appendNode(element, graph)
-            graph.elementCache[change.vNode.service.id] = element
-            graph.vdom.vNodes[change.vNode.service.id] = change.vNode
-        }
-        else if (change.type == "update") {
-            // console.log("Update", change.vNode.service.id)
-            const element = graph.elementCache[change.vNode.service.id]
-            const position = { x: change.vNode.x, y: change.vNode.y }
-            updateNode(change.vNode.service.name, position, element)
-            graph.elementCache[change.vNode.service.id] = element
-            graph.vdom.vNodes[change.vNode.service.id] = change.vNode
-        } else if (change.type == "delete") {
-            // console.log("Delete", change.id)
-            const element = graph.elementCache[change.id]
-            graph.removeChild(element)
-            delete graph.elementCache[change.id]
-            delete graph.vdom.vNodes[change.id]
-        }
-    })
-
-    // Calculate new edge vDom
-    const newEdgeVNodes = interactions.map((interaction) => {
-        const fromNode = graph.elementCache[interaction.from]
-        const toNode = graph.elementCache[interaction.to]
-        const vEdge = calculateVirtualEdge(fromNode, toNode)
-        return { from: interaction.from, to: interaction.to, vEdge }
-    })
-
-    const vNodeEdgeDiff = (() => {
-        const result = [];
-        const toDelete = Object.assign({}, graph.vdom.vEdges)
-        newEdgeVNodes.forEach(({ vEdge, from, to }) => {
-            const key = JSON.stringify({ from, to })
-            const fromCache = graph.vdom.vEdges[key]
-            if (!fromCache) { // Not in cache yet!
-                result.push({ type: "add", vEdge, key })
-            } else if (fromCache == key) {
-                // Cached and fine
-            } else {
-                // In cache but stale
-                result.push({ type: "update", vEdge, key })
-            }
-            // Delete from toDelete means keep
-            delete toDelete[key]
-        })
-        for (const key2 in toDelete) {
-            result.push({ type: "delete", key: key2 })
-        }
-        return result
-    })()
-
-    // Apply VDom changes
-    vNodeEdgeDiff.forEach(change => {
-        if (change.type == "add") {
-            // console.log("Create edge", change.key)
-            const element = createEdge()
-            graph.appendChild(element)
-            updateEdge(element, change.vEdge)
-            graph.edgeElementCache[change.key] = element
-            graph.vdom.vEdges[change.key] = change.vEdge
-        }
-        else if (change.type == "update") {
-            // console.log("Update edge", change.key)
-            const element = graph.edgeElementCache[change.key]
-            updateEdge(element, change.vEdge)
-            graph.edgeElementCache[change.key] = element
-            graph.vdom.vEdges[change.key] = change.vEdge
-        } else if (change.type == "delete") {
-            // console.log("Delete edge", change.key)
-            const element = graph.edgeElementCache[change.key]
-            graph.removeChild(element)
-            delete graph.edgeElementCache[change.key]
-            delete graph.vdom.vEdges[change.key]
-        }
-    })
-
+    });
+    return { predecessors, successors };
 }

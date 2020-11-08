@@ -81,44 +81,19 @@ ostKeys = Object.keys <<< unsafeCoerce
 astLength ∷ ∀ r a. STArray r a -> ST r Int
 astLength ast = AST.unsafeFreeze ast <#> Array.length
 
-assignLayers ∷ Graph -> Object Int
-assignLayers g@(Graph { nodes, edges }) = assigned
-  where
-    predecessorNodes = predecessors g
-
-    allPredecessorsInPreviousLayer visitedBelow nodeId = do
-      let ps = unsafeLookup nodeId predecessorNodes
-      ps # all (\(NodeId id) -> Object.member id visitedBelow)
-
-    assigned =
-      Object.runST do
-        result <- OST.new
-        visited <- OST.new
-        visitedBelowCurrentLayer <- OST.new
-        nodesLeft <- Object.thawST (Object.fromFoldable ((\(Node { id: NodeId k }) -> Tuple k true) <$> nodes))
-        currentLayer <- STRef.new 0
-        while (Object.freezeST nodesLeft <#> (\x -> Object.size x > 0)) do
-          let left = ostKeys nodesLeft
-          visitedBelow <- Object.freezeST visitedBelowCurrentLayer
-          let maybeNode = left # find (allPredecessorsInPreviousLayer visitedBelow)
-          layer <- STRef.read currentLayer
-          case maybeNode of
-            Just nodeId -> do
-              -- Assign v to the layer with a number currentLayer
-              _ <- OST.poke nodeId layer result
-              _ <- OST.poke nodeId true visited
-              void $ OST.delete nodeId nodesLeft
-            Nothing -> do
-              STRef.write (layer + 1) currentLayer # void
-              for_ (ostKeys visited) \nodeId -> do
-                OST.poke nodeId true visitedBelowCurrentLayer
-        pure result
+foreign import assignLayers ∷ Graph -> Object Int
 
 foreign import predecessors ∷ Graph -> Object (Array NodeId)
 
 foreign import successors ∷ Graph -> Object (Array NodeId)
 
+foreign import fillUp ∷ Graph -> Object Int -> { nodes ∷ Array Node, edges ∷ Array Edge, layers ∷ Object Int }
+
+foreign import countCrossings ∷ Array Node -> Array Node -> Array Edge -> Int
+
 foreign import unsafeLookup ∷ ∀ a. String -> Object a -> a
+
+foreign import ordering ∷ Graph -> Object Int -> Array (Array NodeId)
 
 immediatePredecessors ∷ NodeId -> Array Edge -> Array NodeId
 immediatePredecessors nid arr = arr >>= \(Edge { to, from }) -> if to == nid then [ from ] else []
