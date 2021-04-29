@@ -1,16 +1,14 @@
 module Main where
 
 import Prelude
-import Algorithms (assignLayers, fillUp, greedyCycleRemoval, ordering, removeTwoCycles)
-import Data.Array as Array
+import Algorithms (sugiyama)
 import Data.DateTime.Instant (unInstant)
+import Data.Nullable as Nullable
 import Data.Time.Duration (class Duration, negateDuration)
 import Effect (Effect)
 import Effect.Aff (Aff, Milliseconds(..), delay, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Now (now)
-import Effect.Random (randomInt)
-import Foreign.Object (Object)
 import Types (Edge(..), EdgeLabel(..), Graph(..), Node(..), NodeId(..), NodeLabel(..))
 
 foreign import data SVGGraph ∷ Type
@@ -29,73 +27,50 @@ main = do
 
 run ∷ SVGGraph -> Effect Unit
 run svgGraph = do
-  launchAff_ mainLoop
-  where
-    update = do
-      let
-        nodes = someNodes
-        edges = interactions
-        -- nodes =
-        --   [ Node { id: NodeId "n1", label: NodeLabel "1" }
-        --   , Node { id: NodeId "n2", label: NodeLabel "2" }
-        --   , Node { id: NodeId "n3", label: NodeLabel "3" }
-        --   , Node { id: NodeId "n4", label: NodeLabel "4" }
-        --   ]
-        -- edges =
-        --   [ Edge { from: NodeId "n1", to: NodeId "n2", label: EdgeLabel "" }
-        --   , Edge { from: NodeId "n1", to: NodeId "n4", label: EdgeLabel "" }
-        --   , Edge { from: NodeId "n2", to: NodeId "n3", label: EdgeLabel "" }
-        --   , Edge { from: NodeId "n3", to: NodeId "n4", label: EdgeLabel "" }
-        --   ]
-        noTwoCycles = removeTwoCycles $ Graph { nodes, edges }
-        noCycles = greedyCycleRemoval $ Graph { nodes, edges: noTwoCycles.edges }
-        layers1 = assignLayers $ Graph { nodes, edges: noCycles.edges }
-        filled = fillUp (Graph { nodes, edges: edges }) layers1
-        order = ordering (Graph { nodes: filled.nodes, edges: filled.edges }) filled.layers
-      render svgGraph filled.nodes filled.edges order
-
-    mainLoop ∷ Aff Void
-    mainLoop = do
-      startTime <- now <#> unInstant # liftEffect
-      liftEffect update
-      endTime <- now <#> unInstant # liftEffect
-      delay (5000.0 # Milliseconds)
-      -- delay ((1000.0 / 60.0 # Milliseconds) <>- (endTime <>- startTime))
-      mainLoop
+  let ordered = sugiyama (Graph { nodes: someNodes, edges: interactions })
+  render svgGraph ordered.nodes ordered.edges ordered.order
 
 someNodes ∷ Array Node
 someNodes =
   [ Node
       { id: NodeId "some"
       , label: NodeLabel "Some Node"
+      , isDummy: Nullable.notNull false
       }
   , Node
       { id: NodeId "another"
       , label: NodeLabel "Another Node"
+      , isDummy: Nullable.notNull false
       }
   , Node
       { id: NodeId "queue"
       , label: NodeLabel "Queue Node"
+      , isDummy: Nullable.notNull false
       }
   , Node
       { id: NodeId "db"
       , label: NodeLabel "DB Node"
+      , isDummy: Nullable.notNull false
       }
   , Node
       { id: NodeId "bs"
       , label: NodeLabel "BS Node"
+      , isDummy: Nullable.notNull false
       }
   , Node
       { id: NodeId "bus"
       , label: NodeLabel "Bus Node"
+      , isDummy: Nullable.notNull false
       }
   , Node
       { id: NodeId "last"
       , label: NodeLabel "Last Node"
+      , isDummy: Nullable.notNull false
       }
   , Node
       { id: NodeId "hollywood"
       , label: NodeLabel "Hollywood Service"
+      , isDummy: Nullable.notNull false
       }
   ]
 
@@ -106,14 +81,14 @@ interactions =
       , from: NodeId "some"
       , to: NodeId "another"
       }
-  -- , Edge
-  --     { label: EdgeLabel "Bla bl"
-  --     , from: NodeId "queue"
-  --     , to: NodeId "db"
-  --     }
+  , Edge
+      { label: EdgeLabel "Bla bl"
+      , from: NodeId "bs"
+      , to: NodeId "hollywood"
+      }
   , Edge
       { label: EdgeLabel "label"
-      , from: NodeId "db"
+      , from: NodeId "some"
       , to: NodeId "bus"
       }
   , Edge
@@ -128,13 +103,23 @@ interactions =
       }
   , Edge
       { label: EdgeLabel "Bla bla"
-      , from: NodeId "db"
+      , from: NodeId "some"
       , to: NodeId "bs"
       }
   , Edge
       { label: EdgeLabel "label"
       , from: NodeId "hollywood"
-      , to: NodeId "bs"
+      , to: NodeId "queue"
+      }
+  , Edge
+      { label: EdgeLabel "label"
+      , from: NodeId "another"
+      , to: NodeId "hollywood"
+      }
+  , Edge
+      { label: EdgeLabel "label"
+      , from: NodeId "db"
+      , to: NodeId "last"
       }
   ]
 

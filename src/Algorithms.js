@@ -69,7 +69,7 @@ const countAllCrossings = edges => order => {
   return total
 }
 
-const VIRT = "_virtual-"
+const VIRT = "_dummy-"
 exports.fillUp = ({ nodes, edges }) => (layers) => {
   const result = { nodes: [...nodes], edges: [], layers: Object.assign({}, layers) }
   let virtualNodes = 0;
@@ -90,7 +90,7 @@ exports.fillUp = ({ nodes, edges }) => (layers) => {
     for (let j = lFrom; j < lTo - 1; j++) {
       const nodeId = VIRT + virtualNodes
       const previousNodeId = VIRT + (virtualNodes - 1)
-      const vNode = { id: nodeId, label: "VIRTUAL" }
+      const vNode = { id: nodeId, label: "DUMMY", isDummy: true }
       result.nodes.push(vNode)
       result.layers[nodeId] = j + 1
       const isFirstEdge = j == lFrom
@@ -349,10 +349,8 @@ exports.greedyCycleRemoval = (graph) => {
       }
     }
 
-    return {
-      edges: graph.edges.map(e => (sl.indexOf(e.from) == -1) ? e :
-        { from: e.to, to: e.from, label: e.label }
-      )
-    }
+    return graph.edges.map(e => (sl.indexOf(e.from) === -1) ? e :
+      { from: e.to, to: e.from, label: e.label }
+    )
   }
 }

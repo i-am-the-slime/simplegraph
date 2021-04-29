@@ -12,6 +12,7 @@ const MAX_NODES_PER_ROW = 3
 const ARROW_LENGTH = 5
 const STROKE_WIDTH = 2
 const ARROW = ARROW_LENGTH * STROKE_WIDTH
+const LAYER_HEIGHT = 150
 
 // Colours
 // const BG_COL = "#090910"
@@ -54,8 +55,7 @@ const appendNode = (n, graph) => {
     n.visible = true
 }
 
-const createElement = () => {
-
+const createNodeGroupElement = () => {
     const rect = createSVGElement("rect")
     rect.setAttribute("rx", CORNER_RADIUS)
     rect.setAttribute("ry", CORNER_RADIUS)
@@ -85,6 +85,16 @@ const updateNode = (label, point, group) => {
     title.setAttribute("y", point.y + TEXT_PADDING_TOP)
     const text = title.firstChild
     text.nodeValue = label
+}
+
+const updateDummyNode = (point, group) => {
+    const [rect, title] = group.childNodes
+    rect.setAttribute("x", point.x)
+    rect.setAttribute("y", point.y)
+    title.setAttribute("x", point.x + TEXT_PADDING_LEFT)
+    title.setAttribute("y", point.y + TEXT_PADDING_TOP)
+    const text = title.firstChild
+    text.nodeValue = "<↕>️"
 }
 
 const createPathLoop = (bb) => {
@@ -174,13 +184,14 @@ const updateEdge = (path, vEdge) => {
 
 const calculateVirtualEdge = (n1, n2) => {
 
-    const bb1 = n1.getBBox()
-    const bb2 = n2.getBBox()
+    let bb1 = n1.getBBox()
+    let bb2 = n2.getBBox()
 
     const down = bb2.y + bb2.height / 2 > bb1.y + bb1.height / 2
     const up = bb2.y + bb2.height / 2 < bb1.y + bb1.height / 2
     const left = bb2.x + bb2.width / 2 < bb1.x + bb1.width / 2
     const right = bb2.x + bb2.width / 2 > bb1.x + bb1.width / 2
+
 
     let toDraw;
     if (!up && !down && !right && !left) {
@@ -207,7 +218,6 @@ const calculateVirtualEdge = (n1, n2) => {
     return toDraw;
 }
 
-
 // type VEdge = Path"
 // type VNode = { position :: Point, width :: Number, height :: Number }
 
@@ -230,14 +240,14 @@ exports.render = (svgGraph) => (nodes) => (edges) => (positions) => () => {
         }
     })()
     const newVNodes = positions.flatMap((layer, layerIdx) => {
-        return layer.map((nodeId, idx) => {
+        return layer.flatMap((nodeId, idx) => {
             const node = nodes.find(x => x.id == nodeId)
             const result = {
                 node,
                 x: idx * MAX_NODE_WIDTH + (((maxLayerLength - layer.length) / 2) * MAX_NODE_WIDTH),
-                y: layerIdx * 100
+                y: layerIdx * LAYER_HEIGHT,
             }
-            return result
+            return [result]
         })
     })
 
@@ -268,9 +278,13 @@ exports.render = (svgGraph) => (nodes) => (edges) => (positions) => () => {
     vNodeDiff.forEach(change => {
         if (change.type == "add") {
             // console.log("Create", change.vNode.node.id)
-            const element = createElement()
+            const element = createNodeGroupElement()
             const position = { x: change.vNode.x, y: change.vNode.y }
-            updateNode(change.vNode.node.label, position, element)
+            if (change.vNode.node.isDummy) {
+                updateDummyNode(position, element)
+            } else {
+                updateNode(change.vNode.node.label, position, element)
+            }
             appendNode(element, svgGraph)
             svgGraph.elementCache[change.vNode.node.id] = element
             svgGraph.vdom.vNodes[change.vNode.node.id] = change.vNode
@@ -280,7 +294,6 @@ exports.render = (svgGraph) => (nodes) => (edges) => (positions) => () => {
             const element = svgGraph.elementCache[change.vNode.node.id]
             const position = { x: change.vNode.x, y: change.vNode.y }
             updateNode(change.vNode.node.label, position, element)
-            svgGraph.elementCache[change.vNode.node.id] = element
             svgGraph.vdom.vNodes[change.vNode.node.id] = change.vNode
         } else if (change.type == "delete") {
             // console.log("Delete", change.id)
@@ -292,11 +305,15 @@ exports.render = (svgGraph) => (nodes) => (edges) => (positions) => () => {
     })
 
     // Calculate new edge vDom
-    const newEdgeVNodes = edges.map((interaction) => {
-        const fromNode = svgGraph.elementCache[interaction.from]
-        const toNode = svgGraph.elementCache[interaction.to]
-        const vEdge = calculateVirtualEdge(fromNode, toNode)
-        return { from: interaction.from, to: interaction.to, vEdge }
+    const newEdgeVNodes = edges.map((edge) => {
+        const fromNodeElement = svgGraph.elementCache[edge.from]
+        const toNodeElement = svgGraph.elementCache[edge.to]
+        const fromNode = nodes.find(x => x.id === edge.from)
+        const toNode = nodes.find(x => x.id === edge.to)
+        const vEdge = calculateVirtualEdge(
+            fromNodeElement, toNodeElement,
+            fromNode.isDummy, toNode.isDummy)
+        return { from: edge.from, to: edge.to, vEdge }
     })
 
     const vNodeEdgeDiff = (() => {
@@ -347,22 +364,4 @@ exports.render = (svgGraph) => (nodes) => (edges) => (positions) => () => {
         }
     })
 
-}
-
-
-/// !!!
-// COPIED from Algorithms!!! Change it there and copy back here
-/// !!!
-const predecessorsAndSuccessors = ({ nodes, edges }) => {
-    const predecessors = {}
-    const successors = {}
-    nodes.forEach(node => {
-        predecessors[node.id] = []
-        successors[node.id] = []
-        edges.forEach(e => {
-            if (e.from == node.id) successors[node.id].push(e.to)
-            if (e.to == node.id) predecessors[node.id].push(e.from)
-        })
-    });
-    return { predecessors, successors };
 }

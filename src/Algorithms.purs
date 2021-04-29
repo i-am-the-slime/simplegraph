@@ -1,25 +1,18 @@
 module Algorithms where
 
 import Prelude
-import Control.Monad.ST (ST, while)
+import Control.Monad.ST (ST)
 import Control.Monad.ST as ST
-import Control.Monad.ST.Ref as STRef
-import Data.Array (foldMap)
 import Data.Array as Array
 import Data.Array.ST (STArray)
 import Data.Array.ST as AST
-import Data.Map (Map)
-import Data.Map as Map
-import Data.Maybe (Maybe(..), isJust)
-import Data.Newtype (un)
-import Data.Set as Set
-import Data.Traversable (all, find, for_, intercalate)
-import Data.Tuple (Tuple(..))
+import Data.Maybe (isJust)
+import Data.Traversable (for_, intercalate)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Foreign.Object.ST (STObject)
 import Foreign.Object.ST as OST
-import Types (Edge(..), Graph(..), Node(..), NodeId(..))
+import Types (Edge(..), Graph(..), Node, NodeId(..))
 import Unsafe.Coerce (unsafeCoerce)
 
 removeCycles ∷ Graph -> Graph
@@ -36,28 +29,7 @@ removeCycles (Graph { nodes, edges }) = Graph { nodes, edges: newEdges }
             OST.poke toId true visited # void
         AST.freeze mstEdges
 
--- G = (V, E)
--- Sl ← Set.empty
--- Sr ← Set.empty
--- while G is not empty do
---   while G contains a sink do 
---     Choose a sink v
---     Remove v from G 
---     Prepend v to Sr
---   end while
---   while G contains a source do
---      Choose a source u 
---      Remove u from G 
---      Append u to Sl
---   end while
---   if G is not empty then
---     Choose a vertex w such that d+(w) − d−(w) is maximum 
---     Remove w from G
---     Append w it to Sl
---   end if 
--- end while
-
-foreign import greedyCycleRemoval ∷ Graph -> { edges ∷ Array Edge }
+foreign import greedyCycleRemoval ∷ Graph -> Array Edge
 
 foreign import removeTwoCycles ∷ Graph -> { edges ∷ Array Edge, removed ∷ Array Edge }
 
@@ -94,6 +66,15 @@ foreign import countCrossings ∷ Array Node -> Array Node -> Array Edge -> Int
 foreign import unsafeLookup ∷ ∀ a. String -> Object a -> a
 
 foreign import ordering ∷ Graph -> Object Int -> Array (Array NodeId)
+
+sugiyama ∷ Graph -> { nodes ∷ Array Node, edges ∷ Array Edge, order ∷ Array (Array NodeId) }
+sugiyama g@(Graph { nodes, edges }) = do
+  let noTwoCycles = removeTwoCycles g
+  let noCyclesEdges = greedyCycleRemoval $ Graph { nodes: nodes, edges: noTwoCycles.edges }
+  let layers1 = assignLayers $ Graph { nodes: nodes, edges: noCyclesEdges }
+  let filled = fillUp g layers1
+  let order = ordering (Graph { nodes: filled.nodes, edges: filled.edges }) filled.layers
+  { nodes: filled.nodes, edges: noTwoCycles.removed <> filled.edges, order }
 
 immediatePredecessors ∷ NodeId -> Array Edge -> Array NodeId
 immediatePredecessors nid arr = arr >>= \(Edge { to, from }) -> if to == nid then [ from ] else []

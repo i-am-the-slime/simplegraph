@@ -2,6 +2,7 @@ module Types where
 
 import Prelude
 import Data.Newtype (class Newtype)
+import Data.Nullable (Nullable)
 
 newtype NodeId = NodeId String
 
@@ -18,7 +19,7 @@ derive newtype instance ordNodeLabel ∷ Ord NodeLabel
 
 newtype EdgeLabel = EdgeLabel String
 
-newtype Node = Node { id ∷ NodeId, label ∷ NodeLabel }
+newtype Node = Node { id ∷ NodeId, label ∷ NodeLabel, isDummy ∷ Nullable Boolean }
 
 derive instance netwypeNode ∷ Newtype Node _
 derive newtype instance eqNode ∷ Eq Node

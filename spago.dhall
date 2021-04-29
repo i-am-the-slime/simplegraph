@@ -11,10 +11,15 @@ You can edit this file as you like.
   , "effect"
   , "foreign-object"
   , "psci-support"
-  , "quickcheck"
-  , "random"
-  , "snabbdom"
-  , "spec"
+  , "datetime"
+  , "foldable-traversable"
+  , "maybe"
+  , "newtype"
+  , "now"
+  , "nullable"
+  , "prelude"
+  , "st"
+  , "unsafe-coerce"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
